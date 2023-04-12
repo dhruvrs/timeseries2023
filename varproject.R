@@ -4,10 +4,7 @@ dat = read.csv("C:/Users/annaf/Downloads/varData.csv")
 inc= read.csv("C:/Users/annaf/Downloads/inc.csv")
 
 y= ts(dat$realOverall, start=c(2000,2), end=c(2022,3), frequency= 4)
-pce= ts(dat$realpcedur, start= c(2000,3), end= c(2022,3), frequency=4)
-inc= ts(inc$inc, start= c(2000,2), end= c(2022,3), frequency=4)
-inc=diff(log(inc))*100
-y= diff(log(y))*100
+pce= ts(dat$realpcedur, start= c(2000,2), end= c(2022,3), frequency=4)
 
 #compute deseasonalized data
 ys= decompose(y, type="additive")
@@ -27,18 +24,19 @@ summary(ur.df(diff(y), type="none", lags=10, selectlags= "AIC")) #reject
 summary(ur.df(diff(y), type= "drift", lags=10, selectlags= "AIC")) #reject
 summary(ur.df(diff(y), type="trend", lags= 10, selectlags= "AIC")) #reject
 
-#testing for stationarity in income
-summary(ur.df(inc, type="none", lags=10, selectlags= "AIC"))
-summary(ur.df(inc, type= "drift", lags=10, selectlags= "AIC")) 
-summary(ur.df(inc, type="trend", lags= 10, selectlags= "AIC"))
+y= diff(y)
 
-summary(ur.df(diff(inc), type="none", lags=10, selectlags= "AIC")) #reject
-summary(ur.df(diff(inc), type= "drift", lags=10, selectlags= "AIC")) #reject
-summary(ur.df(diff(inc), type="trend", lags= 10, selectlags= "AIC"))
+#testing for unit root in pce
+summary(ur.df(pce, type="none", lags=10, selectlags= "AIC")) #don't reject
+summary(ur.df(pce, type= "drift", lags=10, selectlags= "AIC")) #don't reject
+summary(ur.df(pce, type="trend", lags= 10, selectlags= "AIC")) #don't reject
 
-plot(y)
-acf(y)
-pacf(y)
+#first differences?
+summary(ur.df(diff(pce), type="none", lags=10, selectlags= "AIC"))
+summary(ur.df(diff(pce), type= "drift", lags=10, selectlags= "AIC"))
+summary(ur.df(diff(pce), type="trend", lags= 10, selectlags= "AIC"))
+
+pce= diff(pce)
 
 #select lags
 ### select optimal lags
@@ -47,7 +45,7 @@ pacf(y)
 library(vars)
 
 #declare vector of y:
-yvector= na.omit(ts.union(y, pce, inc))
+yvector= na.omit(ts.union(y, pce))
 
 #select optimal lag:
 VARselect(yvector, lag.max= 8, type=c("const"))
@@ -59,7 +57,6 @@ summary(varmodel)
 
 causality(varmodel, cause="y")$Granger
 causality(varmodel, cause= "pce")$Granger
-causality(varmodel, cause= "inc")$Granger
 
 library(forecast)
 fcast= forecast(varmodel, h=6)
@@ -71,13 +68,14 @@ e= residuals(varmodel)
 #manually compute RMSE-insample for each variable
 sqrt(colMeans(e^2))
 
-impulse_y=irf(varmodel,impulse="y",ortho= TRUE,n.ahead=24,response=c("y"))
-impulse_u=irf(varmodel,impulse="pce",ortho=TRUE,n.ahead=24,response=c("pce"))
+impulse_y=irf(varmodel,impulse="y",ortho= TRUE,n.ahead=24,response=c("pce"))
+impulse_u=irf(varmodel,impulse="pce",ortho=TRUE,n.ahead=24,response=c("y"))
 
 #plot IFR
 plot(impulse_y)
 plot(impulse_u)
 
+impulse_u
 
 #finally, we can compute variance decomposition for each variable
 fevd(varmodel, n.ahead=12)
