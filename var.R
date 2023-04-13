@@ -1,51 +1,90 @@
 library(readr)
 
 ## importing data
-data <- read_csv('C:/Users/dhruv/Documents/School/Time Series/code/varData.csv')
+dat <- read_csv('C:/Users/dhruv/Documents/School/Time Series/code/varData.csv')
+inc <- read_csv('C:/Users/dhruv/Documents/School/Time Series/code/income.csv')
 
-## declaring time series for each variable
-overall = ts(data$realOverall, start=c(2000,2), end=c(2022, 4), frequency=4)
-pce = ts(data$realpcedur, start=c(2000,2), end=c(2022, 4), frequency=4)
+y= ts(dat$realOverall, start=c(2000,2), end=c(2022,3), frequency= 4)
+pce= ts(dat$realpcedur, start= c(2000,3), end= c(2022,3), frequency=4)
+inc= ts(inc$DSPIC96, start= c(2000,2), end= c(2022,3), frequency=4)
+inc=diff(log(inc))*100
+y= diff(log(y))*100
 
-## plot in same plot
-ts.plot(overall)
-ts.plot(pce)
-ts.plot(cbind(overall, pce), col=c('red', 'blue'), lty=c('solid', 'dashed'))
+#compute deseasonalized data
+ys= decompose(y, type="additive")
+y=y-ys$seasonal
 
+df= data.frame(y, pce, inc)
+
+#testing for unit root
 library(urca)
-# the overall variable is looking weird now
-# but i think that they are both still non stationary
-summary(ur.df(overall,type="drift", lags=10, selectlags="AIC"))
-summary(ur.df(pce,type="drift", lags=10, selectlags="AIC"))
 
-# make stationary
-summary(ur.df(na.omit(diff(pce)),type="drift", lags=10, selectlags="AIC"))
-summary(ur.df(na.omit(diff(overall)),type="drift", lags=10, selectlags="AIC"))
-# I am pretty sure that made the variable stationary
+summary(ur.df(y, type="none", lags=10, selectlags= "AIC")) #don't reject
+summary(ur.df(y, type= "drift", lags=10, selectlags= "AIC")) #don't reject
+summary(ur.df(y, type="trend", lags= 10, selectlags= "AIC")) #don't reject
 
-# Ordering of var model
+#testing for unit root in first differences
+summary(ur.df(diff(y), type="none", lags=10, selectlags= "AIC")) #reject
+summary(ur.df(diff(y), type= "drift", lags=10, selectlags= "AIC")) #reject
+summary(ur.df(diff(y), type="trend", lags= 10, selectlags= "AIC")) #reject
+
+#testing for stationarity in income
+summary(ur.df(inc, type="none", lags=10, selectlags= "AIC"))
+summary(ur.df(inc, type= "drift", lags=10, selectlags= "AIC")) 
+summary(ur.df(inc, type="trend", lags= 10, selectlags= "AIC"))
+
+summary(ur.df(diff(inc), type="none", lags=10, selectlags= "AIC")) #reject
+summary(ur.df(diff(inc), type= "drift", lags=10, selectlags= "AIC")) #reject
+summary(ur.df(diff(inc), type="trend", lags= 10, selectlags= "AIC"))
+
+plot(y)
+acf(y)
+pacf(y)
+
+#select lags
+### select optimal lags
+#STEP 2 is to select optimal number of lags. To do this,
+#we first have to declare an ORDERING.
 library(vars)
 
-yvector = ts.union(overall, pce)
+#declare vector of y:
+yvector= na.omit(ts.union(y, pce, inc))
+xvector = na.omit(ts.union(y,pce))
+#select optimal lag:
+VARselect(yvector, lag.max= 8, type=c("const"))
+VARselect(xvector, lag.max= 8, type=c("const"))
 
-VARselect(yvector, lag.max=8,type=c('const'))
-# optimal numbers of lags is 2 according to SC
-varmodel=VAR(yvector, p=4, type=c('const'))
+#estimate VAR(3) and VAR(4)
+varmodel= VAR(yvector, p=3, type=c("const"))
 summary(varmodel)
+withoutIncome = VAR(xvector, p=4, type=c('const'))
+summary(withoutIncome)
 
-causality(varmodel,cause="pce")$Granger
-causality(varmodel,cause="overall")$Granger
+causality(varmodel, cause="y")$Granger
+causality(varmodel, cause= "pce")$Granger
+causality(varmodel, cause= "inc")$Granger
+
+causality(withoutIncome, cause="y")$Granger
+causality(withoutIncome, cause= "pce")$Granger
+
 
 library(forecast)
-fcast = forecast(varmodel, h = 4)
-plot(fcast,include=24)
+fcast= forecast(varmodel, h=6)
+plot(fcast, include=50)
 
-### residuals for each variable of the var model
-e=residuals(varmodel)
-### manually compute RMSE-insample for each variable
+#residuals for each variable of the var model
+e= residuals(varmodel)
+
+#manually compute RMSE-insample for each variable
 sqrt(colMeans(e^2))
 
-### compute response for 24 quarters to an orthogonal shock to ffr
-impulse_inf=irf(varmodel,impulse="overall",ortho = TRUE, n.ahead=24, response=c("pce"))
-## plot IRF
-plot(impulse_inf)
+impulse_y=irf(varmodel,impulse="y",ortho= TRUE,n.ahead=24,response=c("pce"))
+impulse_u=irf(varmodel,impulse="pce",ortho=TRUE,n.ahead=24,response=c("y"))
+
+#plot IFR
+plot(impulse_y)
+plot(impulse_u)
+
+
+#finally, we can compute variance decomposition for each variable
+fevd(varmodel, n.ahead=12)
