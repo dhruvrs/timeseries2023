@@ -11,15 +11,15 @@ income = ts(income$DSPIC96, start= c(2000,2), end= c(2022,3), frequency=4)
 
 
 
-diffOverall = na.omit(diff(log(overall)))
-diffPce = na.omit(diff(log(pce)))
-diffIncome = na.omit(diff(log(income)))
+# diffOverall = na.omit(diff(log(overall)))
+# diffPce = na.omit(diff(log(pce)))
+# diffIncome = na.omit(diff(log(income)))
 
 library(seasonal)
-fit = seas(diffOverall, x11='')
+fit = seas(overall, x11='')
 seasonalOverall = fit$data[,3]
 
-
+plot(seasonalOverall)
 library(vars)
 
 # vector of y: this will be without income
@@ -66,3 +66,4 @@ plot(impulsePce)
 
 # variance decomposition
 fevd(noIncome, n.ahead=12)
+
